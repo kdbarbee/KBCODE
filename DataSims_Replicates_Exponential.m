@@ -3,7 +3,7 @@ clear all
 close all
 
 rep_num = 2; % INPUT: Define the number of replicates to be generated per unique inputs defined in the following xvals vector
-xvals = [5,35,65,95]; % INPUT: Defines the number of unique inputs as well as the range
+xvals = [5,15,25,35]; % INPUT: Defines the number of unique inputs as well as the range
 sz_xvals = size(xvals); % Get the size of the xvals vector defined above
 
 rep_vect = ones(1,rep_num); % Establish vector to represent the number of replicates for each unique input value
@@ -20,29 +20,37 @@ upr_range = max(xrep); % Get upper limit of xrep vector to help create the 'sing
 lwr_range = min(xrep); % Get lower limit of xrep vector to help create the 'singles' data set
 sz_xrep = size(xrep); % Get total number of data points from xrep data set in matrix format
 data_points = sz_xrep(1,2); % Get total number of data points from xrep data set in scalar format
+scale_factor = 0.5; % INPUT: Set scale factor for y-axis bounds on plots. (Multiply '1+/-scale_factor' by ysin_min and ysin_max from model)
 
 xsin_spacing = (upr_range - lwr_range)/(data_points-1); % Calculate the spacing to use between elements in the singles data set
 xsin_raw = lwr_range:xsin_spacing:upr_range; % Define x values for non-replicate data set (singles). These may not be integer values
 xsin = round(xsin_raw); % Define x values for non-replicate data set (singles), integer values (normal rounding)
 
 
-A = 100; % INPUT: Define initial value for model exponential fnc
-k = 0.1; % INPUT: Define exp constant for model exponential fnc
+A = 10000; % INPUT: Define initial value for model exponential fnc
+k = 0.10; % INPUT: Define exp constant for model exponential fnc
+params_fnc = [A;k]; % Store in column vector for later use as starting points in fminsearch
+params_fnc_noise_bandwidth = 0.9; % INPUT: Define noise band to be applied to noise on starting values of fminsearch
+upr2 = 1 + params_fnc_noise_bandwidth; % Upper limit on noise band to be applied to model parameters in creation of fminsearch starting values
+lwr2 = 1 - params_fnc_noise_bandwidth; % Lower limit on noise band to be applied to model parameters in creation of fminsearch starting values
 
 ysin = A*exp(k*xsin); % Define model exponential fnc for non-replicate data set
 yrep = A*exp(k*xrep); % Define model exponential fnc for replicate data set
 
+ysin_min = min(ysin);
+ysin_max = max(ysin);
+
 xfin = round(linspace(lwr_range,upr_range,100)); % Create fine x-data vector for smooth curve of model exponential
 yfin = A*exp(k*xfin); % Define model exponential fnc for fine x data set
 
-opt_param1 = 50000; % INPUT: optimset param1
+opt_param1 = 10000; % INPUT: optimset param1
 opt_param2 = 10000; % INPUT: optimset param2
 
 % % % % % % % % % % % % % % % % % % % % 
 sims = 25;  % INPUT: Set number of iterations of secondary loop
 nb_int = 5; % INPUT: Set number of intervals for noise band
-nb_div = 9; % INPUT: Set divisor for noise band calculations
-trials=250; % INPUT: Define number of trials, where each trial generates a new noisy data set for subsequent curve fitting
+nb_div = 10; % INPUT: Set divisor for noise band calculations
+trials=100; % INPUT: Define number of trials, where each trial generates a new noisy data set for subsequent curve fitting
 % % % % % % % % % % % % % % % % % % % % 
 
 % Set up matrices for use in main loops:
@@ -76,11 +84,14 @@ for nb=1:nb_int;
             yrep_noisy=yrep.*noise; % Apply noise to replicate data
             yrep_noisy_matrix(i,:) = yrep_noisy; % Add noisy data to main noisy data matrix for later calculation of min, max and mean
 
+            noise_fmin = (upr2 - lwr2)*rand(size(params_fnc)) + lwr2; % Create noise column vector with bounds set by lwr2 and upr2
+            noisy_fmin_start = params_fnc.*noise_fmin; % Create noisy starting points for fminsearch, but base them on model parameters
+            
             % Fitting data to an exponential:
             yrep_obj = @(b,x) b(1).*exp(b(2).*x);             % Objective function for replicate data
             OLS = @(b) sum((yrep_obj(b,xrep) - yrep_noisy).^2);          % Ordinary Least Squares cost function
             opts = optimset('MaxFunEvals',opt_param1, 'MaxIter',opt_param2);
-            B = fminsearch(OLS, rand(2,1), opts);       % Use ‘fminsearch’ to minimise the ‘OLS’ function
+            B = fminsearch(OLS, noisy_fmin_start, opts);       % Use ‘fminsearch’ to minimise the ‘OLS’ function
             
             fits(i,1) = B(1,1); % Store replicates fit param 'A' in col 1 of fits matrix
             fits(i,2) = B(2,1); % Store replicates fit param 'k' in clo 2 of fits matrix
@@ -88,17 +99,11 @@ for nb=1:nb_int;
             ysin_obj = @(c,x) c(1).*exp(c(2).*x);             % Objective function for single data points
             OLS2 = @(c) sum((ysin_obj(c,xsin) - ysin_noisy).^2);          % Ordinary Least Squares cost function
             opts = optimset('MaxFunEvals',opt_param1, 'MaxIter',opt_param2);
-            B2 = fminsearch(OLS2, rand(2,1), opts);       % Use ‘fminsearch’ to minimise the ‘OLS’ function
+            B2 = fminsearch(OLS2, noisy_fmin_start, opts);       % Use ‘fminsearch’ to minimise the ‘OLS’ function
 
             fits(i,3) = B2(1,1); % Store singles fit param 'A' in col 3 of fits matrix
             fits(i,4) = B2(2,1); % Store singles fit param 'k' in col 4 of fits matrix
-            
-%             if mod(i,round(trials/2)) == 0; % Plot every nth noisy data set
-%                 plot1 = plot(xrep, yrep_noisy, '*b'); % Start plot by plotting noisy replicate data from each trial
-%                 hold on
-%                 plot2 = plot(xsin, ysin_noisy, '+m'); % Start plot by plotting noisy singles data from each trial
-%                 hold on
-%             end       
+                  
         end
         ysin_noise_max = max(ysin_noisy_matrix);   % Calculate max of noisy data from all trials in each sim
 	    ysin_noise_min = min(ysin_noisy_matrix);   % Calculate min of noisy data from all trials in each sim
@@ -151,9 +156,14 @@ for nb=1:nb_int;
             '-r',...
             'LineWidth',2); % Plot fine model data
     hold on
+	plot(xfin,yfin,...
+            'or',...
+            'LineWidth',2); % Plot fine model data
+    hold on
     lgd = legend([plot1 plot2 plot3 plot4 plot5],...
             {'Noisy replicate data (min, mean, max)', 'Noisy singles data (min, mean, max)',...
             'Fitted curve (replicates)','Fitted curve (singles)', 'Model curve'},'FontSize', 11, 'Location','northwest');
+    axis([lwr_range upr_range (1-scale_factor)*ysin_min (1+scale_factor)*ysin_max])
     hold off
     xlabel('Concentration','FontSize', 12)
     xt = get(gca, 'XTick');
@@ -173,88 +183,3 @@ for nb=1:nb_int;
 %   ratios_CV(nb,:) = [lwr, upr, 100*ratio_sd./ratio_means];
 end
 
-% Arep_fit = fits_avg(1,1);
-% krep_fit = fits_avg(1,2);
-% Asin_fit = fits_avg(1,3);
-% ksin_fit = fits_avg(1,4);
-% yrep_fit = Arep_fit*exp(krep_fit*xfin); % Generate y values for exponential fnc from fit parameters (replicate)
-% ysin_fit = Asin_fit*exp(ksin_fit*xfin); % Generate y values for exponential fnc from fit parameters (singles)
-
-
-
-% figure(1) % Create new figure
-% sp1 = subplot(2,1,1); % subplot(m,n,p) divides current figure into m-by-n grid, creates axes in the grid position specified by p
-% plot(xfin,yfin,... 
-%     '--m',...
-%     'LineWidth',2) % Plot fine model data
-% hold on
-% plot(xrep, yrep_noisy, '*b') % Plot noisy replicate data
-% plot(xfin, yrep_fit, '-g')
-% % plot(xrep, yrep_obj(B,xrep), 'or') % Plot fitted data points
-% legend('Model curve','Noisy replicate data', 'Fitted curve','Location','northwest')
-% hold off
-% grid
-
-
-% figure(1)
-% sp2 = subplot(2,1,2);
-% % sp2 = subplot(2,2,2);
-% 
-% plot(xfin,yfin,... 
-%     '--m',...
-%     'LineWidth',2) % Plot fine model data
-% hold on
-% plot(xsin, ysin_noisy, '*b')
-% plot(xfin, ysin_fit, '-g')
-% % plot(xsin, ysin_obj(B,xsin), 'or')
-% legend('Model curve','Noisy singles data', 'Fitted curve','Location','northwest')
-% hold off
-% grid
-
-% figure(2)
-% sp3 = subplot(4,1,3); % subplot(m,n,p) divides current figure into m-by-n grid, creates axes in the grid position specified by p
-% sp3 = subplot(2,2,3);
-% bplot([fits(:,1) fits(:,3)])
-% sp4 = subplot(2,2,4); 
-% bplot([fits(:,2) fits(:,2)])
-
-
-
-% Plot original data
-% figure(1)
-% plot(x1,y1,...
-%     '-mo',...
-%     'LineWidth',2,...
-%     'MarkerEdgeColor','k',...
-%     'MarkerFaceColor',[.49 1 .63],...
-%     'MarkerSize',8)
-% hold on
-% plot(x1,y1n,...
-%     '--r*',...
-%     'LineWidth',3,...
-%     'MarkerEdgeColor','c',...
-%     'MarkerFaceColor',[.49 1 .63],...
-%     'MarkerSize',8)
-% hold on
-% plot(xrep_short, yrepn_avg,...
-%     ':b+',...
-%     'LineWidth',3,...
-%     'MarkerEdgeColor','g',...
-%     'MarkerFaceColor',[.49 1 .63],...
-%     'MarkerSize',8)
-% grid
-% 
-% % hold off
-% % figure
-% % plot(xrep,yrep, xrep_short, yrepn_avg)
-
-
-% Medians
-% fits_median = median(fits);
-% fits_error_med(1,1) = abs(((fits_median(1,1)-A)/A)*100);
-% fits_error_med(1,2) = abs(((fits_median(1,2)-k)/k)*100); 
-% fits_error_med(1,3) = abs(((fits_median(1,3)-A)/A)*100); 
-% fits_error_med(1,4) = abs(((fits_median(1,4)-k)/k)*100);
-% ratio_errors_medians = zeros(1,2);
-% ratio_errors_medians(1,1) = fits_error_med(1,1)/fits_error_med(1,3);
-% ratio_errors_medians(1,2) = fits_error_med(1,2)/fits_error_med(1,4);
