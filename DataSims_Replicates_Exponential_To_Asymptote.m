@@ -3,7 +3,7 @@ clear all
 close all
 
 rep_num = 2; % INPUT: Define the number of replicates to be generated per unique inputs defined in the following xvals vector
-xvals = [1,11,23,32]; % INPUT: Defines the number of unique inputs as well as the range
+% xvals = [1,11,23,32]; % INPUT: Defines the number of unique inputs as well as the range
 % xvals = [5,10,15,20]; % INPUT: Defines the number of unique inputs as well as the range
 % xvals = [4,16,28,40]; % INPUT: Defines the number of unique inputs as well as the range
 % xvals = [5,20,35]; % INPUT: Defines the number of unique inputs as well as the range
@@ -31,7 +31,7 @@ xsin_raw = lwr_range:xsin_spacing:upr_range; % Define x values for non-replicate
 xsin = round(xsin_raw); % Define x values for non-replicate data set (singles), integer values (normal rounding)
 
 
-A = 10000; % INPUT: Define initial value for model exponential fnc
+A = 20000; % INPUT: Define initial value for model exponential fnc
 k = -0.10; % INPUT: Define exp constant for model exponential fnc
 params_fnc = [A;k]; % Store in column vector for later use as starting points in fminsearch
 params_fnc_noise_bandwidth = 0.9; % INPUT: Define noise band to be applied to noise on starting values of fminsearch
@@ -51,10 +51,10 @@ opt_param1 = 10000; % INPUT: optimset param1
 opt_param2 = 10000; % INPUT: optimset param2
 
 % % % % % % % % % % % % % % % % % % % % 
-sims = 5;  % INPUT: Set number of iterations of secondary loop
-nb_int = 2; % INPUT: Set number of intervals for noise band
-nb_div = 10; % INPUT: Set divisor for noise band calculations
-trials=2; % INPUT: Define number of trials, where each trial generates a new noisy data set for subsequent curve fitting
+sims = 25;  % INPUT: Set number of iterations of secondary loop
+nb_int = 9; % INPUT: Set number of intervals for noise band
+nb_div = 20; % INPUT: Set divisor for noise band calculations
+trials=1; % INPUT: Define number of trials, where each trial generates a new noisy data set for subsequent curve fitting
 % % % % % % % % % % % % % % % % % % % % 
 
 % Set up matrices for use in main loops:
@@ -66,17 +66,19 @@ ratio_sd = zeros(nb_int, 4); % Set up matrix for compiling std dev of ratios gen
 ratios_CV = zeros(nb_int, 6);
 
 r2_means_per_nb = zeros(nb_int,2);
+r2_sd_per_nb = zeros(nb_int,2);
 
 for nb=1:nb_int;
     figure % Create new figure for each noise band iteration
-    r2 = zeros(sims,2);
-    for p=1:sims;
+    r2 = zeros(sims,2); % Set up matrix for storing r2 values for each sim
+    
+    for p=1:sims; % Start of sim loop
         noise_band = nb/nb_div; % Define noise band
         lwr = 1 - noise_band; % Define lower bound for noise vector
         upr = 1 + noise_band; % Define upper bound for noise vector
         fits=zeros(trials,4); % Define matrix for storing fit parameters generated in the following loop
-        ysin_noisy_matrix = zeros(trials,numel(ysin));
-        yrep_noisy_matrix = zeros(trials,numel(yrep));
+        ysin_noisy_matrix = zeros(trials,numel(ysin)); % Set up matrix for storing noisy singles data from each sim
+        yrep_noisy_matrix = zeros(trials,numel(yrep)); % Set up matrix for storing noisy replicates data from each sim
 
         for i=1:trials; % Begin loop for generating noisy data and curve fitting to each noisy data set
             
@@ -109,7 +111,8 @@ for nb=1:nb_int;
             fits(i,3) = B2(1,1); % Store singles fit param 'A' in col 3 of fits matrix
             fits(i,4) = B2(2,1); % Store singles fit param 'k' in col 4 of fits matrix
             
-        end
+        end % End i = 1:trials loop
+        
         if trials > 1
             ysin_noise_max = max(ysin_noisy_matrix);   % Calculate max of noisy data from all trials in each sim
             ysin_noise_min = min(ysin_noisy_matrix);   % Calculate min of noisy data from all trials in each sim
@@ -133,23 +136,23 @@ for nb=1:nb_int;
             
             fits_avg = mean(fits); % Calculate averages of each fit parameter for both replicates and singles data sets for the above trial
 
-        else
-            ysin_noise_max = ysin_noisy_matrix;   % Calculate max of noisy data from all trials in each sim
-            ysin_noise_min = ysin_noisy_matrix;   % Calculate min of noisy data from all trials in each sim
-            ysin_noise_mean = ysin_noisy_matrix; % Calculate mean of noisy data from all trials in each sim
+        else % trials = 1 (Need to handle mean/max/min in a different way than if trials > 1
+            ysin_noise_max = ysin_noisy_matrix; % Let max of noisy data equal original noisy data since it is only a vector for trials = 1
+            ysin_noise_min = ysin_noisy_matrix; % Let min of noisy data equal original noisy data since it is only a vector for trials = 1
+            ysin_noise_mean = ysin_noisy_matrix; % Let mean of noisy data equal original noisy data since it is only a vector for trials = 1
 
-            yrep_noise_max = yrep_noisy_matrix;   % Calculate max of noisy data from all trials in each sim
-            yrep_noise_min = yrep_noisy_matrix;   % Calculate min of noisy data from all trials in each sim
-            yrep_noise_mean = yrep_noisy_matrix; % Calculate mean of noisy data from all trials in each sim
+            yrep_noise_max = yrep_noisy_matrix; % Let max of noisy data equal original noisy data since it is only a vector for trials = 1
+            yrep_noise_min = yrep_noisy_matrix; % Let min of noisy data equal original noisy data since it is only a vector for trials = 1
+            yrep_noise_mean = yrep_noisy_matrix; % Let mean of noisy data equal original noisy data since it is only a vector for trials = 1
             
-            plot1 = plot(xrep, yrep_noise_mean, '*b');         % Plot mean of noisy data from all trials in each sim
+            plot1 = plot(xrep, yrep_noise_mean, '*b'); % Plot original noisy data from the single trial in each sim
             hold on
-            plot2 = plot(xsin, ysin_noise_mean, '+m'); 
+            plot2 = plot(xsin, ysin_noise_mean, '+m'); % Plot original noisy data from the single trial in each sim
             hold on
             
-            fits_avg = fits;
+            fits_avg = fits; % Do not average 'fits' since it is only a row vector when trials = 1
 
-        end   
+        end   % End if logic for trials = 1
         
         Arep_fit = fits_avg(1,1); % Extract average of fit parameter 'A' for replicates data set for the above trial
         krep_fit = fits_avg(1,2); % Extract average of fit parameter 'k' for replicates data set for the above trial
@@ -163,9 +166,11 @@ for nb=1:nb_int;
         [r2sin, rmse_sin] = rsquare(yfin, ysin_fit); % Get r- squared value of singles fit
         
         % TO DO: Get rsquare from each sim. Report average and std dev
-        r2(p,1) = r2rep;
-        r2(p,2) = r2sin;
-        
+%         r2(p,1) = r2rep;
+%         r2(p,2) = r2sin;
+
+        r2(p,1:2) = [r2rep r2sin]; % Build matrix of r2 values for each sim
+
         plot3 = plot(xfin, yrep_fit, '--b', 'LineWidth',2); % Add a fitted curve using avg fit params from all trials in a sim
         hold on
         plot4 = plot(xfin, ysin_fit, ':m','LineWidth',2);
@@ -181,10 +186,13 @@ for nb=1:nb_int;
         fits_error_summary(p,:)= fits_error;
         ratio_errors_summary(p,:)= ratio_errors;
       
-    end
+    end % End of p=1:sims loop
+    
     r2_means = round(1000*mean(r2))/1000;
-    r2_means_per_nb(nb,1) = nb;
-    r2_means_per_nb(nb,2:3) = r2_means;
+    r2_sd = round(1000*std(r2))/1000;
+    r2_means_per_nb(nb,1:3) = [nb r2_means];
+    r2_sd_per_nb(nb,1:3) = [nb r2_sd];
+%     r2_spread_per_nb = [nb, 
     plot5 = plot(xfin,yfin,...
             '-r',...
             'LineWidth',2); % Plot fine model data
@@ -198,15 +206,13 @@ for nb=1:nb_int;
     if trials > 1
         lgd = legend([plot1a plot2a plot3 plot4 plot5],...
             {'Noisy replicate data (min, mean, max)', 'Noisy singles data (min, mean, max)',...
+
             'Fitted curve (replicates)','Fitted curve (singles)', 'Model curve'},'FontSize', 11, 'Location','northwest');
     else
-        
-%     lgd = legend([plot1],...
-%             {'Noisy replicate data (min, mean, max)'}); 
-%     lgd = legend([plot2],...
-%             {'Noisy singles data (min, mean, max)'});
-%         ,...
-%             'Fitted curve (replicates)','Fitted curve (singles)', 'Model curve'},'FontSize', 11, 'Location','northwest');
+     
+        lgd = legend([plot1 plot2 plot3 plot4 plot5],...
+            {'Noisy replicate data', 'Noisy singles data', ...
+             'Fitted curve (replicates)','Fitted curve (singles)', 'Model curve'},'FontSize', 11, 'Location','northwest');
     end
     
     axis([lwr_range upr_range (1-scale_factor)*ysin_min (1+scale_factor)*ysin_max])
@@ -217,14 +223,14 @@ for nb=1:nb_int;
     yt = get(gca, 'YTick');
     set(gca, 'FontSize', 11)
     ylabel('AFU','FontSize', 12)
+    
     lbl_lwr = num2str(round(100*lwr)/100);
     lbl_upr = num2str(round(100*upr)/100);
+    
     plot_title = title({'Impact of Replicates on Curve Fitting (A*(1-exp(k*x))'; ['Noise Band = ', ...
         lbl_lwr, ' to ', lbl_upr, ', Replicates = ', num2str(rep_num)]; [' r2,rep = ', ...
-        num2str(r2_means(1,1)), ', r2,sin = ', num2str(r2_means(1,2))]},'FontSize', 12);
+        num2str(r2_means(1,1)), ', r2,SD = ', num2str(r2_sd(1,1)),', r2,sin = ', num2str(r2_means(1,2)), ', r2,SD = ', num2str(r2_sd(1,2))]},'FontSize', 12);
     grid
-    
-    
     
 %     ratio_means(nb,:) = [lwr, upr, mean(ratio_errors_summary)];
 %     ratio_sd(nb,:) = [lwr, upr, std(ratio_errors_summary)];
